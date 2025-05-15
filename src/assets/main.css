@@ -4,9 +4,6 @@
 body {
   margin: 0;
   padding: 0;
-  overflow: hidden;
-  overscroll-behavior: none; /* Prevent bounce/rubber-band effect */
-  touch-action: manipulation; /* Better touch handling */
   width: 100%;
   height: 100%;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -30,6 +27,18 @@ body {
   /* Background and text defaults */
   background: #0f172a; /* slate-900 */
   color: #1e293b; /* slate-800 */
+  
+  /* Disable scrolling for kiosk view only */
+  overflow: hidden;
+  overscroll-behavior: none; /* Prevent bounce/rubber-band effect */
+}
+
+/* Admin page styles - enable scrolling */
+.admin-page {
+  overflow: auto;
+  overscroll-behavior: auto;
+  min-height: 100vh;
+  background-color: #f3f4f6; /* gray-100 */
 }
 
 /* Make buttons more touchscreen-friendly */
@@ -40,8 +49,8 @@ button {
   user-select: none;
 }
 
-/* Hide scrollbars */
-::-webkit-scrollbar {
+/* Hide scrollbars only in kiosk mode */
+.kiosk-display ::-webkit-scrollbar {
   display: none;
 }
 

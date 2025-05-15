@@ -91,6 +91,8 @@ function App() {
   
   // Handle component cleanup
   useEffect(() => {
+    // Remover clase admin-page por si viene de esa página
+    document.body.classList.remove('admin-page');
     // Add a class to the body for styling
     document.body.classList.add('kiosk-display');
     

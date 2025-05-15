@@ -14,3 +14,31 @@ export interface LockerContextType {
   pinError: string;
   setPinError: (error: string) => void;
 }
+
+export interface LockerUsageRecord {
+  id: string;
+  lockerId: string;
+  email: string;
+  startTime: string;
+  endTime: string | null;
+  duration: number | null; // en minutos
+  status: 'completed' | 'active' | 'abandoned';
+  alerts: LockerAlert[];
+}
+
+export interface LockerAlert {
+  id: string;
+  recordId: string;
+  timestamp: string;
+  type: 'unauthorized_access' | 'invalid_pin' | 'timeout' | 'weight_exceeded' | 'maintenance_needed';
+  description: string;
+  resolved: boolean;
+}
+
+export interface LockerStats {
+  totalUsage: number;
+  averageDuration: number; // en minutos
+  availabilityRate: number; // porcentaje de tiempo disponible
+  alertsCount: number;
+  unauthorizedAttempts: number;
+}
