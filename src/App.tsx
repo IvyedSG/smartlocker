@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useFullscreen } from './hooks/useFullscreen';
-import { validateEmail, generatePin } from './utils/validation';
+import { validateEmail } from './utils/validation';
 import { FullscreenButton } from './components/FullscreenButton';
 import { StatusPanel } from './components/StatusPanel';
 import { AvailableState } from './components/states/AvailableState';
 import { OpenState } from './components/states/OpenState';
 import { OccupiedState } from './components/states/OccupiedState';
 import { RetrievedState } from './components/states/RetrievedState';
+import { useLocker, unlockLocker } from './services/apiService';
 import type { LockerState } from './types';
 
 function App() {
@@ -16,14 +18,19 @@ function App() {
   const [lockerState, setLockerState] = useState<LockerState>('available');
   const [countdown, setCountdown] = useState(10);
   const countdownRef = useRef<number | null>(null);
-  const [generatedPin, setGeneratedPin] = useState<string>('');
   const [pinError, setPinError] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   
   // Use the fullscreen hook
   const { isFullscreen, requestFullscreen } = useFullscreen();
   
   // Handle using the locker
-  const handleUseLocker = () => {
+  const handleUseLocker = async () => {
+    // Reiniciar errores previos
+    setApiError(null);
+    
     if (!email) {
       alert('Por favor ingrese su correo electrónico');
       return;
@@ -34,47 +41,74 @@ function App() {
       return;
     }
     
-    // Generate PIN for later verification
-    const newPin = generatePin();
-    setGeneratedPin(newPin);
-    console.log('PIN generado:', newPin); // In a real app, this would be sent via email
+    setIsLoading(true);
     
-    // Change state to open
-    setLockerState('open');
-    // Reset countdown to 10 seconds
-    setCountdown(10);
-    
-    // Start countdown timer
-    if (countdownRef.current !== null) {
-      clearInterval(countdownRef.current);
-    }
-    
-    // Use window.setInterval for browser compatibility
-    countdownRef.current = window.setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          // When countdown reaches 0, change to occupied state
-          setLockerState('occupied');
-          if (countdownRef.current !== null) {
-            clearInterval(countdownRef.current);
-            countdownRef.current = null;
+    try {
+      // Llamar al API para registrar el uso del locker
+      const response = await useLocker(email);
+      console.log('Respuesta del API:', response);
+      
+      // Change state to open
+      setLockerState('open');
+      // Reset countdown to 10 seconds
+      setCountdown(10);
+      
+      // Start countdown timer
+      if (countdownRef.current !== null) {
+        clearInterval(countdownRef.current);
+      }
+      
+      // Use window.setInterval for browser compatibility
+      countdownRef.current = window.setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            // When countdown reaches 0, change to occupied state
+            setLockerState('occupied');
+            if (countdownRef.current !== null) {
+              clearInterval(countdownRef.current);
+              countdownRef.current = null;
+            }
+            return 0;
           }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (error) {
+      if (error instanceof Error) {
+        setApiError(error.message);
+      } else {
+        setApiError('Ha ocurrido un error desconocido');
+      }
+      console.error('Error al usar el locker:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   // Handle PIN submission
-  const handlePinSubmit = () => {
+  const handlePinSubmit = async () => {
+    // Reiniciar errores previos
+    setPinError('');
+    
     if (!pin) {
       setPinError('Por favor ingrese el PIN');
       return;
     }
     
-    if (pin === generatedPin) {
-      // PIN is correct, open the locker
+    if (pin.length !== 6) {
+      setPinError('El PIN debe tener 6 dígitos');
+      return;
+    }
+    
+    setIsUnlocking(true);
+    
+    try {
+      // Llamar al API para desbloquear el locker
+      const response = await unlockLocker(pin);
+      console.log('Respuesta del API de desbloqueo:', response);
+      
+      // IMPORTANTE: El backend responde con "ocupado" cuando el PIN es correcto
+      // Consideramos exitoso cualquier respuesta 200 del backend
       setPinError('');
       setLockerState('retrieved');
       
@@ -84,8 +118,15 @@ function App() {
         setPin('');
         setEmail('');
       }, 3000);
-    } else {
-      setPinError('PIN incorrecto, por favor intente de nuevo');
+    } catch (error) {
+      if (error instanceof Error) {
+        setPinError(error.message);
+      } else {
+        setPinError('Error de validación del PIN');
+      }
+      console.error('Error al desbloquear el locker:', error);
+    } finally {
+      setIsUnlocking(false);
     }
   };
   
@@ -118,7 +159,9 @@ function App() {
           <AvailableState 
             email={email} 
             setEmail={setEmail} 
-            handleUseLocker={handleUseLocker} 
+            handleUseLocker={handleUseLocker}
+            isLoading={isLoading}
+            apiError={apiError}
           />
         );
         
@@ -137,7 +180,8 @@ function App() {
             setPin={setPin} 
             email={email} 
             pinError={pinError} 
-            handlePinSubmit={handlePinSubmit} 
+            handlePinSubmit={handlePinSubmit}
+            isLoading={isUnlocking}
           />
         );
         
@@ -162,7 +206,7 @@ function App() {
       {/* Kiosk Display Container */}
       <div className="w-full h-full max-h-[900px] max-w-7xl flex items-center justify-center p-0 overflow-hidden">
         <div className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl shadow-2xl overflow-hidden border-8 border-slate-700 flex flex-row">
-          {/* Left Panel - Locker Information (ahora más ancho) */}
+          {/* Left Panel - Locker Information */}
           <StatusPanel status={lockerState} />
           
           {/* Right Panel - Interactive Area */}

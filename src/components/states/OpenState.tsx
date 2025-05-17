@@ -14,7 +14,7 @@ export const OpenState = ({ email, countdown }: OpenStateProps) => {
           <div>
             <h3 className="text-xl font-semibold text-blue-800 mb-2">PIN Enviado</h3>
             <p className="text-blue-700 text-lg">
-              Se ha enviado un PIN de acceso a su correo electrónico: <strong>{email}</strong>. 
+              Se ha enviado un PIN de 6 dígitos a su correo electrónico: <strong>{email}</strong>. 
               Por favor, guarde este PIN para poder recuperar sus pertenencias.
             </p>
           </div>
