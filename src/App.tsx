@@ -111,9 +111,11 @@ function App() {
           setIsUnlocking(false);
         }
         
-        // En modo retiro: cambiar INMEDIATAMENTE a estado retrieved
+        // PUNTO CRÍTICO: Si estamos en modo retiro, SIEMPRE mostrar la pantalla de agradecimiento
         if (isRetrieveMode) {
           console.log("MODO RETIRO: Cambiando a estado 'retrieved' tras evento 'closed'");
+          
+          // Cambiar explícitamente al estado retrieved (pantalla de agradecimiento)
           setLockerState('retrieved');
           
           // Después de un tiempo, regresar al estado inicial para un nuevo usuario
@@ -357,13 +359,17 @@ function App() {
     
     // Luego reestablecer todos los estados en orden específico para evitar condiciones de carrera
     console.log("Reiniciando estados de la aplicación");
+    
+    // IMPORTANTE: Primero desactivamos el modo de retiro para que no interfiera con los otros cambios de estado
+    setIsRetrieveMode(false);
+    
+    // Luego limpiamos los demás estados
     setIsUnlocking(false);
     setObjectDetected(false);
     setEventContext('');
     setCountdown(10);
     setPinError('');
     setApiError(null);
-    setIsRetrieveMode(false);
     setPin('');
     setEmail('');
     
