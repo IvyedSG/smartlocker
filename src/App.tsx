@@ -49,9 +49,11 @@ function App() {
       case 'opening':
         // El locker físicamente ha comenzado a abrirse
         if (isRetrieveMode) {
-          setLockerState('retrieved'); // Comienza a mostrar la interfaz de retirado
+          // En modo retiro, mostrar la interfaz específica de retiro
+          setLockerState('retrieved');
         } else {
-          setLockerState('open'); // Comienza a mostrar la interfaz de depósito
+          // En modo depósito, mostrar la interfaz de depósito abierto
+          setLockerState('open');
         }
         break;
         
@@ -231,15 +233,27 @@ function App() {
       const response = await unlockLocker(pin);
       console.log('Respuesta del API de desbloqueo:', response);
       
+      // Si la respuesta dice que el estado es "disponible", significa que
+      // el objeto ya fue retirado o el locker está listo para usarse nuevamente
+      if (response.status === "disponible" && response.assigned_user_id === null) {
+        // Resetear completamente la aplicación para comenzar de nuevo
+        setLockerState('available');
+        setPin('');
+        setEmail('');
+        setIsRetrieveMode(false);
+        setObjectDetected(false);
+        setEventContext('');
+        return;
+      }
+      
       // Si no hay WebSocket, manejar la transición manualmente
       if (!wsConnected) {
+        // Primero mostrar la interfaz de retiro
         setLockerState('retrieved');
+        
         // Después de un tiempo, volver a disponible y reiniciar todo
         setTimeout(() => {
-          setLockerState('available');
-          setPin(''); // Limpiar PIN
-          setEmail(''); // Reiniciar el email para comenzar desde cero
-          setIsRetrieveMode(false);
+          resetApp();
         }, 5000);
       }
       // En caso contrario, WebSocket manejará las transiciones
@@ -257,6 +271,18 @@ function App() {
     } finally {
       setIsUnlocking(false);
     }
+  };
+  
+  // Función para reiniciar completamente la aplicación
+  const resetApp = () => {
+    setLockerState('available');
+    setPin('');
+    setEmail('');
+    setIsRetrieveMode(false);
+    setApiError(null);
+    setPinError('');
+    setObjectDetected(false);
+    setEventContext('');
   };
   
   // Handle component cleanup

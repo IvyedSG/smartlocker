@@ -1,11 +1,14 @@
-import { Check, ArrowRight, Clock } from 'lucide-react';
+import { Check, ArrowRight, Package } from 'lucide-react';
 
 interface RetrievedStateProps {
   countdown?: number;
   closing?: boolean;
 }
 
-export const RetrievedState = ({ countdown = 3, closing = false }: RetrievedStateProps) => {
+export const RetrievedState = ({ 
+  countdown = 3, 
+  closing = false,
+}: RetrievedStateProps) => {
   return (
     <div className="w-full max-w-2xl text-center">
       <div className="flex justify-center mb-10">
@@ -30,10 +33,10 @@ export const RetrievedState = ({ countdown = 3, closing = false }: RetrievedStat
       
       <div className="bg-gray-50 border-gray-200 border rounded-xl p-6 flex items-center justify-between">
         <div className="text-gray-500 text-xl flex items-center gap-2">
-          <Clock className="w-6 h-6" />
-          <span>Volviendo al estado inicial...</span>
+          <Package className="w-6 h-6" />
+          <span>Proceso completado correctamente</span>
         </div>
-        <div className="text-gray-400 animate-pulse">
+        <div className="text-gray-400">
           <ArrowRight className="w-8 h-8" />
         </div>
       </div>
