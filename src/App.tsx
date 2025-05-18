@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useFullscreen } from './hooks/useFullscreen';
 import { validateEmail } from './utils/validation';
 import { FullscreenButton } from './components/FullscreenButton';
@@ -23,8 +23,15 @@ function App() {
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [eventContext, setEventContext] = useState<string>('');
-  // Añade un estado para rastrear la disponibilidad de WebSocket
+  // Estado para rastrear la disponibilidad de WebSocket
   const [wsConnected, setWsConnected] = useState<boolean>(false);
+  // Nueva variable para la detección de objetos
+  const [objectDetected, setObjectDetected] = useState<boolean>(false);
+  // Modo actual (store o retrieve)
+  const [isRetrieveMode, setIsRetrieveMode] = useState<boolean>(false);
+  
+  // Timer references para limpieza
+  const timerRef = useRef<number | null>(null);
   
   // Use the fullscreen hook
   const { isFullscreen, requestFullscreen } = useFullscreen();
@@ -39,38 +46,74 @@ function App() {
     }
     
     switch (event.event) {
-      case 'store_timer':
-        setCountdown(event.value);
-        setEventContext(event.context);
-        break;
-        
-      case 'closing_timer':
-        setCountdown(event.value);
-        setEventContext(event.context);
-        break;
-        
-      case 'closed':
-        if (lockerState === 'open') {
-          setLockerState('occupied');
-        } else if (lockerState === 'retrieved') {
-          setLockerState('available');
+      case 'opening':
+        // El locker físicamente ha comenzado a abrirse
+        if (isRetrieveMode) {
+          setLockerState('retrieved'); // Comienza a mostrar la interfaz de retirado
+        } else {
+          setLockerState('open'); // Comienza a mostrar la interfaz de depósito
         }
+        break;
+        
+      case 'store_timer':
+        // Contador que se reinicia mientras hay detección de movimiento
+        setCountdown(event.value);
+        setEventContext(event.context || '');
         break;
         
       case 'object_detected':
       case 'object_present':
-      case 'distance_change':
-        // These events can be used for more detailed status updates
-        // For example, showing a visual indication when an object is detected
+        // Objeto detectado en el locker (sensor de distancia)
+        setObjectDetected(true);
+        // Resetear cualquier UI relacionada con espera
+        break;
+        
+      case 'object_absent':
+        // No hay objeto en el locker (relevante en modo retrieve)
+        setObjectDetected(false);
+        break;
+        
+      case 'object_still_present':
+        // El objeto aún no ha sido retirado (modo retrieve)
+        setObjectDetected(true);
         break;
         
       case 'closing_in':
-        setEventContext(event.context);
+        // Aviso de que se va a cerrar pronto
+        setEventContext(event.context || 'cerrando locker');
+        break;
+        
+      case 'closing_timer':
+        // Cuenta regresiva final antes del cierre
+        setCountdown(event.value);
+        setEventContext(event.context || 'cerrando locker');
+        break;
+        
+      case 'closed':
+        // El locker físicamente se ha cerrado
+        if (isRetrieveMode) {
+          // Si estábamos en modo retiro, ahora está disponible
+          // El backend ya maneja el cambio de estado en BD
+          setLockerState('available');
+          setIsRetrieveMode(false);
+        } else {
+          // Si estábamos en modo depósito, ahora está ocupado
+          setLockerState('occupied');
+        }
+        // Limpiar información contextual
+        setEventContext('');
+        setObjectDetected(false);
+        break;
+        
+      case 'object_retrieved':
+        // El servidor confirma que el objeto ha sido retirado
+        // Este evento es más para logs, la UI ya está en estado 'retrieved'
+        // y la transición a 'available' ocurrirá con 'closed'
         break;
     }
   };
   
-  // Añadir un event handler para cuando la conexión se establezca
+  // Inicializar conexión WebSocket
   useEffect(() => {
     const handleConnectionOpened = () => {
       setWsConnected(true);
@@ -84,10 +127,15 @@ function App() {
       websocketService.removeEventListener(handleWebSocketEvent);
       websocketService.removeConnectionOpenHandler(handleConnectionOpened);
       websocketService.disconnect();
+      
+      // Limpiar cualquier timer pendiente
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+      }
     };
   }, []);
   
-  // Handle using the locker
+  // Manejar uso del locker (depósito)
   const handleUseLocker = async () => {
     setApiError(null);
     
@@ -102,32 +150,39 @@ function App() {
     }
     
     setIsLoading(true);
+    setIsRetrieveMode(false); // Asegurarnos de que estamos en modo depósito
     
     try {
       const response = await useLocker(email);
       console.log('Respuesta del API:', response);
       
-      // Si WebSocket no se conectó, implementa una cuenta regresiva manual
+      // Si WebSocket no está conectado, implementar una cuenta regresiva manual
       if (!wsConnected) {
         setLockerState('open');
         let count = 10;
         setCountdown(count);
         
-        const timer = setInterval(() => {
+        // UsarRef para el timer para limpieza adecuada
+        if (timerRef.current !== null) {
+          clearInterval(timerRef.current);
+        }
+        
+        timerRef.current = window.setInterval(() => {
           count--;
           setCountdown(count);
           
           if (count <= 0) {
-            clearInterval(timer);
+            if (timerRef.current !== null) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
             setLockerState('occupied');
           }
         }, 1000);
-        
-        return () => clearInterval(timer);
-      } else {
-        // Si WebSocket está conectado, confía en que manejará los estados
-        setLockerState('open');
       }
+      // En caso contrario, WebSocket manejará los estados
+      // La transición a 'open' ocurrirá en el handler de eventos
+      
     } catch (error) {
       if (error instanceof Error) {
         setApiError(error.message);
@@ -140,7 +195,7 @@ function App() {
     }
   };
   
-  // Handle PIN submission
+  // Manejar envío de PIN (retiro)
   const handlePinSubmit = async () => {
     // Reset previous errors
     setPinError('');
@@ -156,15 +211,21 @@ function App() {
     }
     
     setIsUnlocking(true);
+    setIsRetrieveMode(true); // Establecer que estamos en modo retiro
     
     try {
       // Call API to unlock the locker
       const response = await unlockLocker(pin);
       console.log('Respuesta del API de desbloqueo:', response);
       
-      // Set state to 'retrieved' - WebSocket will handle the transition back to 'available'
-      setPinError('');
-      setLockerState('retrieved');
+      // Si no hay WebSocket, manejar la transición manualmente
+      if (!wsConnected) {
+        setLockerState('retrieved');
+        // Después de un tiempo, volver a disponible
+        setTimeout(() => setLockerState('available'), 5000);
+      }
+      // En caso contrario, WebSocket manejará las transiciones
+      // La transición a 'retrieved' ocurrirá con el evento 'opening'
       
     } catch (error) {
       if (error instanceof Error) {
@@ -173,6 +234,8 @@ function App() {
         setPinError('Error de validación del PIN');
       }
       console.error('Error al desbloquear el locker:', error);
+      // Reset del modo retiro en caso de error
+      setIsRetrieveMode(false);
     } finally {
       setIsUnlocking(false);
     }
@@ -211,8 +274,10 @@ function App() {
       case 'open':
         return (
           <OpenState 
-            email={email} 
+            email={email}
             countdown={countdown} 
+            objectDetected={objectDetected}
+            context={eventContext}
           />
         );
       
@@ -229,7 +294,12 @@ function App() {
         );
         
       case 'retrieved':
-        return <RetrievedState />;
+        return (
+          <RetrievedState 
+            countdown={countdown}
+            closing={eventContext.includes('cerr')}
+          />
+        );
       
       default:
         return (

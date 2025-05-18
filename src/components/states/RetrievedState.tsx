@@ -1,6 +1,11 @@
 import { Check, ArrowRight, Clock } from 'lucide-react';
 
-export const RetrievedState = () => {
+interface RetrievedStateProps {
+  countdown?: number;
+  closing?: boolean;
+}
+
+export const RetrievedState = ({ countdown = 3, closing = false }: RetrievedStateProps) => {
   return (
     <div className="w-full max-w-2xl text-center">
       <div className="flex justify-center mb-10">
@@ -15,7 +20,11 @@ export const RetrievedState = () => {
         <h3 className="text-3xl font-bold text-emerald-800 mb-6">¡Gracias por usar nuestro servicio!</h3>
         <p className="text-emerald-700 text-xl">
           Su objeto ha sido retirado correctamente.
-          El locker se cerrará automáticamente en unos segundos.
+          {closing && (
+            <div className="mt-4 text-red-600 animate-pulse text-2xl">
+              El locker se cerrará automáticamente en {countdown} segundos
+            </div>
+          )}
         </p>
       </div>
       

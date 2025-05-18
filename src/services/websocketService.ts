@@ -1,11 +1,15 @@
-// Define event types based on the logs
+// Actualizar las definiciones de eventos para incluir todos los posibles
 export type LockerEvent = 
   | { event: 'store_timer'; value: number; context: string }
   | { event: 'object_present'; value: number }
+  | { event: 'object_still_present' }  // Nuevo
+  | { event: 'object_absent' }         // Nuevo
   | { event: 'object_detected' }
+  | { event: 'object_retrieved' }      // Nuevo
   | { event: 'distance_change'; value: number }
   | { event: 'closing_in'; value: number; context: string }
   | { event: 'closing_timer'; value: number; context: string }
+  | { event: 'opening' }               // Nuevo
   | { event: 'closed' };
 
 export type WebSocketHandler = (event: LockerEvent) => void;

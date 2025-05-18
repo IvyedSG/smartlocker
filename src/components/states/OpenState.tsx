@@ -1,11 +1,15 @@
-import { Mail, DoorOpen, Timer, AlertCircle } from 'lucide-react';
+import { Mail, DoorOpen, Timer, AlertCircle, Check } from 'lucide-react';
 
 interface OpenStateProps {
   email: string;
   countdown: number;
+  objectDetected: boolean;
+  context: string;
 }
 
-export const OpenState = ({ email, countdown }: OpenStateProps) => {
+export const OpenState = ({ email, countdown, objectDetected, context }: OpenStateProps) => {
+  const isClosing = context.includes('cerr');
+
   return (
     <div className="w-full max-w-2xl">
       <div className="bg-blue-50 border-l-8 border-blue-500 p-6 rounded-lg mb-10">
@@ -23,16 +27,42 @@ export const OpenState = ({ email, countdown }: OpenStateProps) => {
       
       <h2 className="text-4xl font-bold text-gray-800 mb-8 text-center">Locker Abierto</h2>
       
-      <div className="bg-amber-50 border-8 border-amber-200 rounded-xl p-10 mb-10 text-center">
+      <div 
+        className={`${
+          isClosing 
+            ? 'bg-amber-50 border-amber-200'
+            : objectDetected 
+              ? 'bg-green-50 border-green-200' 
+              : 'bg-amber-50 border-amber-200'
+        } border-8 rounded-xl p-10 mb-10 text-center`}
+      >
         <div className="flex justify-center mb-8">
-          <DoorOpen className="w-32 h-32 text-amber-500" />
+          {objectDetected ? (
+            <Check className="w-32 h-32 text-green-500" />
+          ) : (
+            <DoorOpen className="w-32 h-32 text-amber-500" />
+          )}
         </div>
         
-        <h3 className="text-3xl font-bold text-amber-800 mb-6">Esperando que coloque su objeto...</h3>
+        <h3 className={`text-3xl font-bold mb-6 ${
+          objectDetected ? 'text-green-800' : 'text-amber-800'
+        }`}>
+          {objectDetected 
+            ? 'Objeto detectado' 
+            : 'Esperando que coloque su objeto...'}
+        </h3>
         
-        <div className="text-amber-700 flex items-center justify-center gap-4 text-2xl">
-          <Timer className="w-8 h-8 animate-pulse" />
-          <span>Cerrando automáticamente en <strong className="text-3xl">{countdown}s</strong></span>
+        <div className={`flex items-center justify-center gap-4 text-2xl ${
+          isClosing ? 'text-red-600 animate-pulse' : (objectDetected ? 'text-green-700' : 'text-amber-700')
+        }`}>
+          <Timer className="w-8 h-8" />
+          <span>
+            {isClosing 
+              ? `Cerrando automáticamente en ${countdown}s`
+              : objectDetected 
+                ? `Detectando movimiento... ${countdown}s` 
+                : `Cerrando automáticamente en ${countdown}s`}
+          </span>
         </div>
       </div>
       
