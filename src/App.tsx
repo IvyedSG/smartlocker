@@ -304,7 +304,7 @@ function App() {
       setIsUnlocking(false);
     }
   };
-  
+   
   // Agregar esta función después de handlePinSubmit
   const handleRetrievalFlow = () => {
     // Si recibimos un evento closed en modo retiro
