@@ -50,6 +50,13 @@ function App() {
         // El locker físicamente ha comenzado a abrirse
         console.log("Evento opening: El locker se está abriendo", isRetrieveMode ? "en modo retiro" : "en modo depósito");
         setLockerState('open');
+        
+        // Si estábamos en proceso de desbloqueo, el locker ya se está abriendo físicamente
+        // así que terminamos la animación de carga
+        if (isUnlocking) {
+          setIsUnlocking(false);
+        }
+        
         if (isRetrieveMode) {
           // Cuando abrimos para retiro, siempre hay un objeto presente
           setObjectDetected(true);
@@ -99,6 +106,11 @@ function App() {
         // El locker físicamente se ha cerrado
         console.log("Evento closed: El locker se ha cerrado", isRetrieveMode ? "después del retiro" : "después del depósito");
         
+        // Asegurarse de que la animación de desbloqueo se detiene
+        if (isUnlocking) {
+          setIsUnlocking(false);
+        }
+        
         if (isRetrieveMode) {
           // En modo retiro: mostrar pantalla de retiro exitoso y luego volver a "disponible"
           setLockerState('retrieved');
@@ -106,7 +118,7 @@ function App() {
           // Después de un tiempo, regresar al estado inicial para un nuevo usuario
           setTimeout(() => {
             resetApp();
-          }, 3000);
+          }, 5000); // Aumentamos el tiempo a 5 segundos para dar más tiempo para ver el mensaje
         } else {
           // En modo depósito: ahora el locker está ocupado
           setLockerState('occupied');
@@ -249,9 +261,6 @@ function App() {
       // No cambiamos el estado aquí. Esperaremos a que la WebSocket nos indique
       // cuándo el locker se abre físicamente.
       
-      // ELIMINADO: La transición a 'open' NO debe ocurrir aquí,
-      // sino que debe esperar al evento "opening" del WebSocket.
-      
       // Si no hay WebSocket conectado, implementamos una solución alternativa
       if (!wsConnected) {
         console.log("WebSocket no conectado, simulando flujo de retiro...");
@@ -298,7 +307,12 @@ function App() {
       // En caso de error, no vamos a modo retiro
       setIsRetrieveMode(false);
     } finally {
-      setIsUnlocking(false);
+      // Importante: Al completar la llamada API, cambiamos isUnlocking a false
+      // PERO solo si hubo un error. Si fue exitoso, dejamos que el cambio de estado por
+      // WebSocket maneje la transición visual
+      if (!wsConnected) {
+        setIsUnlocking(false);
+      }
     }
   };
    
@@ -325,6 +339,7 @@ function App() {
     // Primero limpiar cualquier timer pendiente
     if (timerRef.current !== null) {
       clearInterval(timerRef.current);
+      clearTimeout(timerRef.current);
       timerRef.current = null;
     }
     
@@ -338,6 +353,7 @@ function App() {
     setObjectDetected(false);
     setEventContext('');
     setCountdown(10);
+    setIsUnlocking(false); // Asegurarse de que isUnlocking también se resetea
     
     console.log("Aplicación reiniciada completamente");
   };
