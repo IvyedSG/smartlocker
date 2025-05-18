@@ -113,24 +113,35 @@ function App() {
     }
   };
   
-  // Inicializar conexión WebSocket
+  // Inicializar conexión WebSocket una sola vez
   useEffect(() => {
     const handleConnectionOpened = () => {
       setWsConnected(true);
     };
     
-    websocketService.connect();
-    websocketService.addEventListener(handleWebSocketEvent);
-    websocketService.onConnectionOpen(handleConnectionOpened);
+    // Verificar si ya tenemos una conexión activa antes de intentar conectar
+    if (!wsConnected) {
+      console.log("Iniciando conexión WebSocket...");
+      websocketService.connect();
+      websocketService.addEventListener(handleWebSocketEvent);
+      websocketService.onConnectionOpen(handleConnectionOpened);
+    }
     
+    // Función de limpieza solo cuando el componente se desmonta completamente
     return () => {
+      console.log("Limpiando recursos de WebSocket...");
       websocketService.removeEventListener(handleWebSocketEvent);
       websocketService.removeConnectionOpenHandler(handleConnectionOpened);
-      websocketService.disconnect();
       
-      // Limpiar cualquier timer pendiente
+      // Limpia cualquier timer pendiente
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      
+      // Solo desconectar si la app se está desmontando completamente
+      if (document.visibilityState === 'hidden') {
+        websocketService.disconnect();
       }
     };
   }, []);

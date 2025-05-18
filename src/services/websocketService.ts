@@ -27,14 +27,27 @@ class WebSocketService {
   connect(lockerId: string = '1'): void {
     this.lockerId = lockerId;
     
-    // Cambia 0.0.0.0 por localhost o la IP real del servidor
-    const wsUrl = import.meta.env.VITE_WS_URL || `ws://localhost:8000/ws/locker/${lockerId}`;
-    
+    // Asegúrate de que cualquier conexión existente esté completamente cerrada
     if (this.socket) {
-      this.disconnect();
+      try {
+        this.disconnect();
+        // Pequeño tiempo de espera para asegurar que el socket anterior se cierre completamente
+        setTimeout(() => this.initializeConnection(lockerId), 100);
+        return;
+      } catch (error) {
+        console.error('Error al desconectar el socket existente:', error);
+      }
     }
     
+    this.initializeConnection(lockerId);
+  }
+  
+  // Método auxiliar para inicializar la conexión
+  private initializeConnection(lockerId: string): void {
+    const wsUrl = import.meta.env.VITE_WS_URL || `ws://localhost:8000/ws/locker/${lockerId}`;
+    
     try {
+      console.log(`WebSocket: Creando nueva conexión a ${wsUrl}`);
       this.socket = new WebSocket(wsUrl);
       
       // Set up event listeners
@@ -50,19 +63,35 @@ class WebSocketService {
     }
   }
   
-  // Disconnect
-  disconnect(): void {
+  // Desconectar de manera más limpia
+    disconnect(): void {
     if (this.socket) {
-      this.socket.close();
-      this.socket = null;
-      console.log('WebSocket: Disconnected');
+        // Primero elimina todos los listeners para evitar comportamientos inesperados
+        if (this.socket.onopen) this.socket.onopen = null;
+        if (this.socket.onmessage) this.socket.onmessage = null;
+        if (this.socket.onerror) this.socket.onerror = null;
+        if (this.socket.onclose) this.socket.onclose = null;
+        
+        // Luego cierra la conexión
+        try {
+        if (this.socket.readyState === WebSocket.OPEN || 
+            this.socket.readyState === WebSocket.CONNECTING) {
+            this.socket.close(1000, "Disconnected by client");
+        }
+        } catch (e) {
+        console.error("Error al cerrar el WebSocket:", e);
+        }
+        
+        this.socket = null;
+        console.log('WebSocket: Disconnected');
     }
     
+    // Limpiar timeout de reconexión si existe
     if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
+        clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = null;
     }
-  }
+    }
   
   // Send a message to the server
   send(data: any): void {
@@ -135,14 +164,27 @@ class WebSocketService {
   
   // Attempt to reconnect
   private attemptReconnect(): void {
+    // Detener el heartbeat mientras intentamos reconectar
+    this.stopHeartbeat();
+    
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+      const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 30000);
       
       console.log(`WebSocket: Intentando reconectar en ${delay}ms (intento ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
       
+      if (this.reconnectTimeout !== null) {
+        clearTimeout(this.reconnectTimeout);
+      }
+      
       this.reconnectTimeout = window.setTimeout(() => {
-        this.connect(this.lockerId);
+        // Asegúrate de que cualquier socket antiguo esté completamente cerrado
+        if (this.socket) {
+          this.disconnect();
+        }
+        
+        // Intenta conectar de nuevo
+        this.initializeConnection(this.lockerId);
       }, delay);
     } else if (this.reconnectAttempts === this.maxReconnectAttempts) {
       console.error('WebSocket: Número máximo de intentos de reconexión alcanzado');
