@@ -48,79 +48,81 @@ function App() {
     switch (event.event) {
       case 'opening':
         // El locker físicamente ha comenzado a abrirse
+        console.log("Evento opening: El locker se está abriendo", isRetrieveMode ? "en modo retiro" : "en modo depósito");
+        setLockerState('open');
         if (isRetrieveMode) {
-          // En modo retiro, mostrar la interfaz específica de retiro
-          setLockerState('open'); // Cambiamos a 'open' pero con isRetrieveMode=true
-        } else {
-          // En modo depósito, mostrar la interfaz de depósito abierto
-          setLockerState('open');
+          // Cuando abrimos para retiro, siempre hay un objeto presente
+          setObjectDetected(true);
         }
         break;
         
       case 'store_timer':
-        // Contador que se reinicia mientras hay detección de movimiento
+        // Contador mientras el locker está abierto
+        console.log(`Evento store_timer: contador = ${event.value}, contexto = "${event.context}"`);
         setCountdown(event.value);
-        // Modificar el contexto basado en el modo actual
-        if (isRetrieveMode) {
-          setEventContext('esperando retiro del objeto');
-        } else {
-          setEventContext(event.context || '');
-        }
+        setEventContext(event.context || '');
         break;
         
       case 'object_detected':
       case 'object_present':
         // Objeto detectado en el locker (sensor de distancia)
+        console.log("Evento object_detected/present: Se detectó un objeto en el locker");
         setObjectDetected(true);
-        // Resetear cualquier UI relacionada con espera
         break;
         
       case 'object_absent':
         // No hay objeto en el locker (relevante en modo retrieve)
+        console.log("Evento object_absent: No hay objeto en el locker");
         setObjectDetected(false);
         break;
         
       case 'object_still_present':
         // El objeto aún no ha sido retirado (modo retrieve)
+        console.log("Evento object_still_present: El objeto sigue en el locker");
         setObjectDetected(true);
         break;
         
       case 'closing_in':
         // Aviso de que se va a cerrar pronto
+        console.log(`Evento closing_in: El locker se cerrará pronto (${event.value}s), contexto = "${event.context}"`);
         setEventContext(event.context || 'cerrando locker');
         break;
         
       case 'closing_timer':
         // Cuenta regresiva final antes del cierre
+        console.log(`Evento closing_timer: Conteo para cierre = ${event.value}s, contexto = "${event.context}"`);
         setCountdown(event.value);
         setEventContext(event.context || 'cerrando locker');
         break;
         
       case 'closed':
         // El locker físicamente se ha cerrado
+        console.log("Evento closed: El locker se ha cerrado", isRetrieveMode ? "después del retiro" : "después del depósito");
+        
         if (isRetrieveMode) {
-          // Si estábamos en modo retiro, primero mostrar la pantalla de retrieved
-          setLockerState('retrieved'); // Mostrar pantalla de objeto retirado
+          // En modo retiro: mostrar pantalla de retiro exitoso y luego volver a "disponible"
+          setLockerState('retrieved');
           
-          // Después de un tiempo (3 segundos), volver a 'available'
+          // Después de un tiempo, regresar al estado inicial para un nuevo usuario
           setTimeout(() => {
             resetApp();
           }, 3000);
         } else {
-          // Si estábamos en modo depósito, ahora está ocupado
+          // En modo depósito: ahora el locker está ocupado
           setLockerState('occupied');
         }
-        // Limpiar información contextual
+        
+        // Limpiar información contextual en ambos casos
         setEventContext('');
         setObjectDetected(false);
         break;
         
       case 'object_retrieved':
-        // El objeto ha sido retirado exitosamente
+        // El objeto ha sido retirado exitosamente (confirmación específica)
+        console.log("Evento object_retrieved: El objeto ha sido retirado correctamente");
         if (isRetrieveMode) {
-          // Cambiar a estado retrieved para mostrar confirmación visual
-          setLockerState('retrieved');
           setObjectDetected(false);
+          // No cambiamos a estado retrieved aquí, esperamos el evento "closed"
         }
         break;
     }
@@ -235,36 +237,34 @@ function App() {
     }
     
     setIsUnlocking(true);
-    setIsRetrieveMode(true); // Establecer que estamos en modo retiro
     
     try {
       // Call API to unlock the locker
       const response = await unlockLocker(pin);
       console.log('Respuesta del API de desbloqueo:', response);
       
-      // Si la respuesta dice que el estado es "disponible", significa que
-      // el objeto ya fue retirado o el locker está listo para usarse nuevamente
-      if (response.status === "disponible" && response.assigned_user_id === null) {
-        // Mostrar brevemente la pantalla de objeto retirado antes de resetear
-        setLockerState('retrieved');
-        
-        // Después de 3 segundos, reiniciar completamente
-        setTimeout(() => {
-          resetApp();
-        }, 3000);
-        
-        return;
-      }
+      // Marcar el modo de retiro para que los componentes muestren la interfaz adecuada
+      setIsRetrieveMode(true);
       
-      // Si no hay WebSocket, manejar la transición manualmente
+      // No cambiamos el estado aquí. Esperaremos a que la WebSocket nos indique
+      // cuándo el locker se abre físicamente.
+      
+      // ELIMINADO: La transición a 'open' NO debe ocurrir aquí,
+      // sino que debe esperar al evento "opening" del WebSocket.
+      
+      // Si no hay WebSocket conectado, implementamos una solución alternativa
       if (!wsConnected) {
-        // En modo retiro, mostrar directamente la interfaz de open con isRetrieveMode=true
+        console.log("WebSocket no conectado, simulando flujo de retiro...");
+        // Forzar el estado open para simular la apertura del locker
         setLockerState('open');
+        // Comenzar con objeto presente en el locker
+        setObjectDetected(true);
+        
+        // Simular temporizador
         let count = 10;
         setCountdown(count);
         setEventContext('esperando retiro del objeto');
         
-        // Simular el timer del locker
         if (timerRef.current !== null) {
           clearInterval(timerRef.current);
         }
@@ -279,18 +279,15 @@ function App() {
               timerRef.current = null;
             }
             
-            // Mostrar pantalla de objeto retirado antes de reiniciar
+            // Simular cierre del locker
             setLockerState('retrieved');
-            
-            // Después de 3 segundos, reiniciar completamente
             setTimeout(() => {
               resetApp();
             }, 3000);
           }
         }, 1000);
       }
-      // En caso contrario, WebSocket manejará las transiciones
-    
+      // Si hay WebSocket, los eventos de WebSocket se encargarán de actualizar el estado
     } catch (error) {
       if (error instanceof Error) {
         setPinError(error.message);
@@ -298,7 +295,7 @@ function App() {
         setPinError('Error de validación del PIN');
       }
       console.error('Error al desbloquear el locker:', error);
-      // Reset del modo retiro en caso de error
+      // En caso de error, no vamos a modo retiro
       setIsRetrieveMode(false);
     } finally {
       setIsUnlocking(false);
