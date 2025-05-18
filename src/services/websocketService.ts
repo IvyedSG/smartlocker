@@ -1,4 +1,3 @@
-
 // Define event types based on the logs
 export type LockerEvent = 
   | { event: 'store_timer'; value: number; context: string }
@@ -18,12 +17,14 @@ class WebSocketService {
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
   private reconnectTimeout: number | null = null;
+  private connectionOpenHandlers: (() => void)[] = [];
 
   // Initialize connection
   connect(lockerId: string = '1'): void {
     this.lockerId = lockerId;
     
-    const wsUrl = import.meta.env.VITE_WS_URL || `ws://0.0.0.0:8000/ws/locker/${lockerId}`;
+    // Cambia 0.0.0.0 por localhost o la IP real del servidor
+    const wsUrl = import.meta.env.VITE_WS_URL || `ws://localhost:8000/ws/locker/${lockerId}`;
     
     if (this.socket) {
       this.disconnect();
@@ -78,10 +79,23 @@ class WebSocketService {
     this.eventHandlers = this.eventHandlers.filter(h => h !== handler);
   }
   
+  // Method to register connection open handlers
+  onConnectionOpen(handler: () => void): void {
+    this.connectionOpenHandlers.push(handler);
+  }
+
+  // Method to remove connection open handlers
+  removeConnectionOpenHandler(handler: () => void): void {
+    this.connectionOpenHandlers = this.connectionOpenHandlers.filter(h => h !== handler);
+  }
+  
   // Handle socket open event
   private handleOpen(): void {
     console.log('WebSocket: Connection established');
     this.reconnectAttempts = 0;
+    
+    // Notify all connection open handlers
+    this.connectionOpenHandlers.forEach(handler => handler());
   }
   
   // Handle received messages
@@ -108,7 +122,10 @@ class WebSocketService {
   
   // Handle socket error
   private handleError(error: Event): void {
-    console.error('WebSocket: Error', error);
+    // Solo registrar el error una vez, no en cada intento de reconexión
+    if (this.reconnectAttempts === 0) {
+      console.error('WebSocket: Error inicial de conexión');
+    }
     this.attemptReconnect();
   }
   
@@ -118,13 +135,14 @@ class WebSocketService {
       this.reconnectAttempts++;
       const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
       
-      console.log(`WebSocket: Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+      console.log(`WebSocket: Intentando reconectar en ${delay}ms (intento ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
       
       this.reconnectTimeout = window.setTimeout(() => {
         this.connect(this.lockerId);
       }, delay);
-    } else {
-      console.error('WebSocket: Maximum reconnection attempts reached');
+    } else if (this.reconnectAttempts === this.maxReconnectAttempts) {
+      console.error('WebSocket: Número máximo de intentos de reconexión alcanzado');
+      this.reconnectAttempts++; // Incrementar para que no vuelva a mostrar este mensaje
     }
   }
 }

@@ -23,6 +23,8 @@ function App() {
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [eventContext, setEventContext] = useState<string>('');
+  // Añade un estado para rastrear la disponibilidad de WebSocket
+  const [wsConnected, setWsConnected] = useState<boolean>(false);
   
   // Use the fullscreen hook
   const { isFullscreen, requestFullscreen } = useFullscreen();
@@ -30,6 +32,11 @@ function App() {
   // WebSocket event handler
   const handleWebSocketEvent = (event: LockerEvent) => {
     console.log('WebSocket event received:', event);
+    
+    // Si recibimos eventos, significa que estamos conectados
+    if (!wsConnected) {
+      setWsConnected(true);
+    }
     
     switch (event.event) {
       case 'store_timer':
@@ -63,20 +70,25 @@ function App() {
     }
   };
   
-  // Initialize WebSocket connection
+  // Añadir un event handler para cuando la conexión se establezca
   useEffect(() => {
+    const handleConnectionOpened = () => {
+      setWsConnected(true);
+    };
+    
     websocketService.connect();
     websocketService.addEventListener(handleWebSocketEvent);
+    websocketService.onConnectionOpen(handleConnectionOpened);
     
     return () => {
       websocketService.removeEventListener(handleWebSocketEvent);
+      websocketService.removeConnectionOpenHandler(handleConnectionOpened);
       websocketService.disconnect();
     };
   }, []);
   
   // Handle using the locker
   const handleUseLocker = async () => {
-    // Reset previous errors
     setApiError(null);
     
     if (!email) {
@@ -92,13 +104,30 @@ function App() {
     setIsLoading(true);
     
     try {
-      // Call API to register locker use
       const response = await useLocker(email);
       console.log('Respuesta del API:', response);
       
-      // Change state to open - the WebSocket will handle the actual countdown
-      setLockerState('open');
-      
+      // Si WebSocket no se conectó, implementa una cuenta regresiva manual
+      if (!wsConnected) {
+        setLockerState('open');
+        let count = 10;
+        setCountdown(count);
+        
+        const timer = setInterval(() => {
+          count--;
+          setCountdown(count);
+          
+          if (count <= 0) {
+            clearInterval(timer);
+            setLockerState('occupied');
+          }
+        }, 1000);
+        
+        return () => clearInterval(timer);
+      } else {
+        // Si WebSocket está conectado, confía en que manejará los estados
+        setLockerState('open');
+      }
     } catch (error) {
       if (error instanceof Error) {
         setApiError(error.message);
