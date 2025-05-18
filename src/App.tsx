@@ -111,14 +111,16 @@ function App() {
           setIsUnlocking(false);
         }
         
+        // En modo retiro: cambiar INMEDIATAMENTE a estado retrieved
         if (isRetrieveMode) {
-          // En modo retiro: mostrar pantalla de retiro exitoso y luego volver a "disponible"
+          console.log("MODO RETIRO: Cambiando a estado 'retrieved' tras evento 'closed'");
           setLockerState('retrieved');
           
           // Después de un tiempo, regresar al estado inicial para un nuevo usuario
           setTimeout(() => {
+            console.log("REINICIANDO APLICACIÓN después del retiro exitoso");
             resetApp();
-          }, 5000); // Aumentamos el tiempo a 5 segundos para dar más tiempo para ver el mensaje
+          }, 5000);
         } else {
           // En modo depósito: ahora el locker está ocupado
           setLockerState('occupied');
@@ -134,7 +136,6 @@ function App() {
         console.log("Evento object_retrieved: El objeto ha sido retirado correctamente");
         if (isRetrieveMode) {
           setObjectDetected(false);
-          // No cambiamos a estado retrieved aquí, esperamos el evento "closed"
         }
         break;
     }
@@ -258,9 +259,6 @@ function App() {
       // Marcar el modo de retiro para que los componentes muestren la interfaz adecuada
       setIsRetrieveMode(true);
       
-      // No cambiamos el estado aquí. Esperaremos a que la WebSocket nos indique
-      // cuándo el locker se abre físicamente.
-      
       // Si no hay WebSocket conectado, implementamos una solución alternativa
       if (!wsConnected) {
         console.log("WebSocket no conectado, simulando flujo de retiro...");
@@ -306,54 +304,72 @@ function App() {
       console.error('Error al desbloquear el locker:', error);
       // En caso de error, no vamos a modo retiro
       setIsRetrieveMode(false);
+      setIsUnlocking(false); // Importante para detener la animación de carga
     } finally {
-      // Importante: Al completar la llamada API, cambiamos isUnlocking a false
-      // PERO solo si hubo un error. Si fue exitoso, dejamos que el cambio de estado por
-      // WebSocket maneje la transición visual
-      if (!wsConnected) {
-        setIsUnlocking(false);
-      }
+      // SOLO en caso de error cambiamos isUnlocking a false
+      // Si fue exitoso, esperamos al evento "opening" para cambiar isUnlocking a false
     }
   };
    
-  // Agregar esta función después de handlePinSubmit
+  // Actualizar esta función
   const handleRetrievalFlow = () => {
     // Si recibimos un evento closed en modo retiro
-    if (isRetrieveMode && lockerState === 'open') {
-      // Limpiar todo y volver al estado inicial
-      resetApp();
+    if (isRetrieveMode && lockerState === 'closed') {
+      // Cambiamos a estado retrieved primero
+      setLockerState('retrieved');
+      
+      // Después de un tiempo, volver al estado inicial
+      setTimeout(() => {
+        resetApp();
+      }, 5000);
     }
   };
 
   // Agregar un useEffect para manejar automáticamente el flujo de retiro
   useEffect(() => {
     // Esta función se ejecutará cada vez que cambie lockerState o isRetrieveMode
-    if (lockerState === 'open' && isRetrieveMode) {
-      // Estamos en modo retiro con el locker abierto
-      console.log("En modo retiro, esperando a que el usuario retire su objeto");
+    if (isRetrieveMode) {
+      console.log(`Modo retiro activo, estado actual: ${lockerState}`);
+      
+      if (lockerState === 'open') {
+        console.log("En modo retiro, esperando a que el usuario retire su objeto");
+      } else if (lockerState === 'retrieved') {
+        console.log("Objeto retirado exitosamente, mostrando pantalla de agradecimiento");
+        // Asegurarse de que la animación de desbloqueo se detiene si sigue activa
+        if (isUnlocking) {
+          setIsUnlocking(false);
+        }
+      }
     }
-  }, [lockerState, isRetrieveMode]);
+  }, [lockerState, isRetrieveMode, isUnlocking]);
   
   // Función para reiniciar completamente la aplicación
   const resetApp = () => {
+    console.log("Iniciando proceso de reseteo de la aplicación...");
+    
     // Primero limpiar cualquier timer pendiente
     if (timerRef.current !== null) {
+      console.log("Limpiando timers pendientes");
       clearInterval(timerRef.current);
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
     
-    // Luego reestablecer todos los estados
-    setLockerState('available');
-    setPin('');
-    setEmail('');
-    setIsRetrieveMode(false);
-    setApiError(null);
-    setPinError('');
+    // Luego reestablecer todos los estados en orden específico para evitar condiciones de carrera
+    console.log("Reiniciando estados de la aplicación");
+    setIsUnlocking(false);
     setObjectDetected(false);
     setEventContext('');
     setCountdown(10);
-    setIsUnlocking(false); // Asegurarse de que isUnlocking también se resetea
+    setPinError('');
+    setApiError(null);
+    setIsRetrieveMode(false);
+    setPin('');
+    setEmail('');
+    
+    // El cambio de estado del locker debe ser lo último para evitar renderizados intermedios
+    console.log("Estableciendo estado del locker a 'available'");
+    setLockerState('available');
     
     console.log("Aplicación reiniciada completamente");
   };
