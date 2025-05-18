@@ -96,6 +96,8 @@ function App() {
           // El backend ya maneja el cambio de estado en BD
           setLockerState('available');
           setIsRetrieveMode(false);
+          setPin(''); // Limpiar PIN
+          setEmail(''); // Importante: Reiniciar el email para empezar de nuevo
         } else {
           // Si estábamos en modo depósito, ahora está ocupado
           setLockerState('occupied');
@@ -232,8 +234,13 @@ function App() {
       // Si no hay WebSocket, manejar la transición manualmente
       if (!wsConnected) {
         setLockerState('retrieved');
-        // Después de un tiempo, volver a disponible
-        setTimeout(() => setLockerState('available'), 5000);
+        // Después de un tiempo, volver a disponible y reiniciar todo
+        setTimeout(() => {
+          setLockerState('available');
+          setPin(''); // Limpiar PIN
+          setEmail(''); // Reiniciar el email para comenzar desde cero
+          setIsRetrieveMode(false);
+        }, 5000);
       }
       // En caso contrario, WebSocket manejará las transiciones
       // La transición a 'retrieved' ocurrirá con el evento 'opening'
@@ -289,6 +296,7 @@ function App() {
             countdown={countdown} 
             objectDetected={objectDetected}
             context={eventContext}
+            isRetrieveMode={isRetrieveMode} // Pasamos el modo actual
           />
         );
       
