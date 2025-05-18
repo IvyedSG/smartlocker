@@ -71,9 +71,20 @@ function App() {
         break;
         
       case 'object_detected':
-      case 'object_present':
         // Objeto detectado en el locker (sensor de distancia)
-        console.log("Evento object_detected/present: Se detectó un objeto en el locker");
+        console.log("Evento object_detected: Se detectó un objeto en el locker");
+        setObjectDetected(true);
+        break;
+        
+      case 'object_present':
+        // Objeto detectado con valor de distancia
+        console.log(`Evento object_present: Objeto presente a ${event.value}cm`);
+        setObjectDetected(true);
+        break;
+        
+      case 'object_still_present':
+        // El objeto sigue en el locker
+        console.log("Evento object_still_present: El objeto sigue en el locker");
         setObjectDetected(true);
         break;
         
@@ -81,12 +92,6 @@ function App() {
         // No hay objeto en el locker (relevante en modo retrieve)
         console.log("Evento object_absent: No hay objeto en el locker");
         setObjectDetected(false);
-        break;
-        
-      case 'object_still_present':
-        // El objeto aún no ha sido retirado (modo retrieve)
-        console.log("Evento object_still_present: El objeto sigue en el locker");
-        setObjectDetected(true);
         break;
         
       case 'closing_in':
@@ -97,33 +102,30 @@ function App() {
         
       case 'closing_timer':
         // Cuenta regresiva final antes del cierre
-        console.log(`Evento closing_timer: Conteo para cierre = ${event.value}s, contexto = "${event.context}"`);
+        console.log(`Evento closing_timer: Conteo para cierre = ${event.value}s`);
         setCountdown(event.value);
-        setEventContext(event.context || 'cerrando locker');
+        setEventContext('cerrando locker');
         break;
         
       case 'closed':
-        // ADICIÓN CRUCIAL: Capturar el valor actual de isRetrieveMode
-        // para no depender del estado que podría ser inconsistente
-        const currentIsRetrieveMode = isRetrieveMode;
-        
+        // El locker físicamente se ha cerrado
         console.log("===== EVENTO CLOSED RECIBIDO =====");
-        console.log("Estado isRetrieveMode:", currentIsRetrieveMode);
+        console.log("Tipo de cierre:", event.tipo || "no especificado");
+        console.log("Estado isRetrieveMode:", isRetrieveMode);
         console.log("Estado actual del locker:", lockerState);
         
-        // El locker físicamente se ha cerrado
-        console.log("Evento closed: El locker se ha cerrado", 
-                    currentIsRetrieveMode ? "después del retiro" : "después del depósito");
+        // Verificar el tipo de cierre enviado por el backend
+        const closeType = event.tipo || "";
         
         // Asegurarse de que la animación de desbloqueo se detiene
         if (isUnlocking) {
           setIsUnlocking(false);
         }
         
-        // *** CAMBIO CRUCIAL: Manejar los diferentes modos ***
-        if (currentIsRetrieveMode) {
-          // Usar una variable local que sabemos que tiene el valor correcto
-          console.log("MODO RETIRO -> CAMBIANDO A PANTALLA DE AGRADECIMIENTO");
+        // MEJORA CRUCIAL: Usar el tipo de cierre del backend como fuente de verdad
+        if (closeType === "unlock" || isRetrieveMode) {
+          // Si el cierre fue por desbloqueo (retiro) o estamos en modo retiro
+          console.log("MODO RETIRO (tipo='unlock') -> CAMBIANDO A PANTALLA DE AGRADECIMIENTO");
           
           // Detener cualquier timer previo para evitar interferencias
           if (timerRef.current !== null) {
@@ -131,11 +133,11 @@ function App() {
             timerRef.current = null;
           }
           
-          // IMPORTANTE: Cambiar explícitamente a 'retrieved' (pantalla de agradecimiento)
+          // Cambiar explícitamente a 'retrieved' (pantalla de agradecimiento)
           setLockerState('retrieved');
           console.log("ESTADO CAMBIADO A: retrieved");
           
-          // Programar el reinicio después de 5 segundos, con un enforce adicional
+          // Programar el reinicio después de 5 segundos
           const resetTimer = setTimeout(() => {
             console.log("TEMPORIZADOR EJECUTADO: Reiniciando aplicación tras retiro exitoso");
             resetApp();
@@ -144,7 +146,8 @@ function App() {
           // Guardamos la referencia al timer para limpiarlo si es necesario
           timerRef.current = resetTimer;
         } else {
-          // En modo depósito: ahora el locker está ocupado
+          // Si el cierre fue por uso (depósito, tipo='use') o no se especifica tipo
+          console.log("MODO DEPÓSITO (tipo='use') -> CAMBIANDO A ESTADO OCUPADO");
           setLockerState('occupied');
         }
         
@@ -156,9 +159,13 @@ function App() {
       case 'object_retrieved':
         // El objeto ha sido retirado exitosamente (confirmación específica)
         console.log("Evento object_retrieved: El objeto ha sido retirado correctamente");
-        if (isRetrieveMode) {
-          setObjectDetected(false);
-        }
+        
+        // Marcar que no hay objeto en el locker
+        setObjectDetected(false);
+        
+        // Este evento solo confirma que se retiró el objeto,
+        // pero NO cambia el estado del locker - esperamos el evento 'closed'
+        console.log("Objeto retirado detectado. Esperando evento 'closed' para cambiar estado");
         break;
     }
   };
@@ -391,7 +398,7 @@ function App() {
     // IMPORTANTE: Hacerlo de forma síncrona para garantizar que se ejecuta
     console.log("Reiniciando estados de la aplicación de forma síncrona");
     
-    // Desactivamos el modo de retiro primero
+    // Desactivamos el modo de retiro primero para evitar problemas de estado
     setIsRetrieveMode(false);
     setIsUnlocking(false);
     setObjectDetected(false);
@@ -402,7 +409,7 @@ function App() {
     setPin('');
     setEmail('');
     
-    // Crucial: cambiamos el estado del locker al final
+    // Finalmente, cambiamos el estado del locker al disponible
     setLockerState('available');
     
     console.log("Aplicación reiniciada completamente");

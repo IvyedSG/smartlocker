@@ -30,10 +30,10 @@ export const RetrievedState = ({
           )}
         </p>
 
-        {/* Siempre mostrar el mensaje de reinicio */}
+        {/* Mostrar el mensaje de reinicio con animación más sutil */}
         <div className="mt-6 text-blue-600 flex items-center justify-center gap-2 text-xl animate-pulse">
           <RefreshCw className="w-6 h-6" />
-          <span>Reiniciando el sistema en unos segundos...</span>
+          <span>Reiniciando el sistema para nuevo uso...</span>
         </div>
       </div>
       
