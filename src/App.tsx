@@ -103,8 +103,17 @@ function App() {
         break;
         
       case 'closed':
+        // ADICIÓN CRUCIAL: Capturar el valor actual de isRetrieveMode
+        // para no depender del estado que podría ser inconsistente
+        const currentIsRetrieveMode = isRetrieveMode;
+        
+        console.log("===== EVENTO CLOSED RECIBIDO =====");
+        console.log("Estado isRetrieveMode:", currentIsRetrieveMode);
+        console.log("Estado actual del locker:", lockerState);
+        
         // El locker físicamente se ha cerrado
-        console.log("Evento closed: El locker se ha cerrado", isRetrieveMode ? "después del retiro" : "después del depósito");
+        console.log("Evento closed: El locker se ha cerrado", 
+                    currentIsRetrieveMode ? "después del retiro" : "después del depósito");
         
         // Asegurarse de que la animación de desbloqueo se detiene
         if (isUnlocking) {
@@ -112,15 +121,21 @@ function App() {
         }
         
         // *** CAMBIO CRUCIAL: Manejar los diferentes modos ***
-        if (isRetrieveMode) {
-          // Asegúrate de que esta línea se ejecuta correctamente
+        if (currentIsRetrieveMode) {
+          // Usar una variable local que sabemos que tiene el valor correcto
           console.log("MODO RETIRO -> CAMBIANDO A PANTALLA DE AGRADECIMIENTO");
           
-          // IMPORTANTE: Cambiar explícitamente a 'retrieved' (pantalla de agradecimiento)
-          // y hacer el reseteo en un setTimeout separado
-          setLockerState('retrieved');
+          // Detener cualquier timer previo para evitar interferencias
+          if (timerRef.current !== null) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+          }
           
-          // Programar el reinicio después de 5 segundos
+          // IMPORTANTE: Cambiar explícitamente a 'retrieved' (pantalla de agradecimiento)
+          setLockerState('retrieved');
+          console.log("ESTADO CAMBIADO A: retrieved");
+          
+          // Programar el reinicio después de 5 segundos, con un enforce adicional
           const resetTimer = setTimeout(() => {
             console.log("TEMPORIZADOR EJECUTADO: Reiniciando aplicación tras retiro exitoso");
             resetApp();
@@ -338,6 +353,29 @@ function App() {
     }
   }, [lockerState, isRetrieveMode, isUnlocking]);
   
+  // Efecto más robusto para monitorear cambios de estado en modo retiro
+  useEffect(() => {
+    if (isRetrieveMode) {
+      console.log(`ESTADO: Modo retiro activo, estado del locker: ${lockerState}`);
+      
+      if (lockerState === 'open') {
+        console.log("En modo retiro, esperando a que el usuario retire su objeto");
+      } else if (lockerState === 'retrieved') {
+        console.log("Objeto retirado exitosamente, mostrando pantalla de agradecimiento");
+        
+        // Si llegamos aquí y no hay timer programado, lo programamos
+        if (timerRef.current === null) {
+          console.log("CREANDO TIMER DE REINICIO DESDE EFFECT (backup)");
+          const resetTimer = setTimeout(() => {
+            console.log("TEMPORIZADOR DE BACKUP EJECUTADO: Reiniciando aplicación tras retiro exitoso");
+            resetApp();
+          }, 5000);
+          timerRef.current = resetTimer;
+        }
+      }
+    }
+  }, [lockerState, isRetrieveMode]);
+  
   // Función para reiniciar completamente la aplicación
   const resetApp = () => {
     console.log("Iniciando proceso de reseteo de la aplicación...");
@@ -350,27 +388,24 @@ function App() {
       timerRef.current = null;
     }
     
-    // IMPORTANTE: Realizamos los cambios en un único ciclo de renderizado
-    // para evitar condiciones de carrera
-    setTimeout(() => {
-      console.log("Reiniciando estados de la aplicación en un único ciclo");
-      
-      // Desactivamos el modo de retiro primero
-      setIsRetrieveMode(false);
-      setIsUnlocking(false);
-      setObjectDetected(false);
-      setEventContext('');
-      setCountdown(10);
-      setPinError('');
-      setApiError(null);
-      setPin('');
-      setEmail('');
-      
-      // Crucial: cambiamos el estado del locker al final
-      setLockerState('available');
-      
-      console.log("Aplicación reiniciada completamente");
-    }, 0);
+    // IMPORTANTE: Hacerlo de forma síncrona para garantizar que se ejecuta
+    console.log("Reiniciando estados de la aplicación de forma síncrona");
+    
+    // Desactivamos el modo de retiro primero
+    setIsRetrieveMode(false);
+    setIsUnlocking(false);
+    setObjectDetected(false);
+    setEventContext('');
+    setCountdown(10);
+    setPinError('');
+    setApiError(null);
+    setPin('');
+    setEmail('');
+    
+    // Crucial: cambiamos el estado del locker al final
+    setLockerState('available');
+    
+    console.log("Aplicación reiniciada completamente");
   };
   
   // Handle component cleanup
