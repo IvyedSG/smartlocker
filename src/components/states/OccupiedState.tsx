@@ -1,4 +1,4 @@
-import { Lock, Key, X, AlertCircle, Package, Mail, Loader } from 'lucide-react';
+import { Lock, Key, X, AlertCircle, Package, Loader } from 'lucide-react';
 
 interface OccupiedStateProps {
   pin: string;
@@ -11,8 +11,7 @@ interface OccupiedStateProps {
 
 export const OccupiedState = ({ 
   pin, 
-  setPin, 
-  email, 
+  setPin,
   pinError, 
   handlePinSubmit,
   isLoading
@@ -20,20 +19,6 @@ export const OccupiedState = ({
   return (
     <div className="w-full max-w-2xl">
       <h2 className="text-4xl font-bold text-gray-800 mb-8 text-center">Recuperar Objeto</h2>
-      
-      {/* Reminder about email */}
-      <div className="bg-blue-50 border-l-8 border-blue-500 p-6 rounded-lg mb-10">
-        <div className="flex items-start gap-4">
-          <Mail className="w-8 h-8 text-blue-500 flex-shrink-0 mt-1" />
-          <div>
-            <h3 className="text-xl font-semibold text-blue-800 mb-2">PIN Enviado</h3>
-            <p className="text-blue-700 text-lg">
-              Se envió un PIN de 6 dígitos al correo: <strong>{email}</strong>.
-              Por favor, revise su bandeja de entrada para obtener el código.
-            </p>
-          </div>
-        </div>
-      </div>
       
       {/* PIN Input */}
       <div className="space-y-4 mb-10">
