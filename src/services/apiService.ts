@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Obtener la URL base de la API desde las variables de entorno
-const API_BASE_URL = 'http://0.0.0.0:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://0.0.0.0:8000';
 
 // Configuración base de axios
 const api = axios.create({
@@ -43,6 +43,16 @@ export const useLocker = async (email: string): Promise<LockerResponse> => {
 export const unlockLocker = async (pin: string): Promise<LockerResponse> => {
   try {
     const response = await api.post<LockerResponse>('/unlock', { pin });
+    return response.data;
+  } catch (error) {
+    return handleApiError(error);
+  }
+};
+
+// Función para obtener el estado actual del locker
+export const getLockerStatus = async (lockerId: string = '1'): Promise<LockerResponse> => {
+  try {
+    const response = await api.get<LockerResponse>(`/locker/${lockerId}`);
     return response.data;
   } catch (error) {
     return handleApiError(error);

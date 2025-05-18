@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useFullscreen } from './hooks/useFullscreen';
 import { validateEmail } from './utils/validation';
 import { FullscreenButton } from './components/FullscreenButton';
@@ -9,6 +8,8 @@ import { OpenState } from './components/states/OpenState';
 import { OccupiedState } from './components/states/OccupiedState';
 import { RetrievedState } from './components/states/RetrievedState';
 import { useLocker, unlockLocker } from './services/apiService';
+import { websocketService } from './services/websocketService';
+import type { LockerEvent } from './services/websocketService';
 import type { LockerState } from './types';
 
 function App() {
@@ -17,18 +18,65 @@ function App() {
   const [pin, setPin] = useState('');
   const [lockerState, setLockerState] = useState<LockerState>('available');
   const [countdown, setCountdown] = useState(10);
-  const countdownRef = useRef<number | null>(null);
   const [pinError, setPinError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [eventContext, setEventContext] = useState<string>('');
   
   // Use the fullscreen hook
   const { isFullscreen, requestFullscreen } = useFullscreen();
+
+  // WebSocket event handler
+  const handleWebSocketEvent = (event: LockerEvent) => {
+    console.log('WebSocket event received:', event);
+    
+    switch (event.event) {
+      case 'store_timer':
+        setCountdown(event.value);
+        setEventContext(event.context);
+        break;
+        
+      case 'closing_timer':
+        setCountdown(event.value);
+        setEventContext(event.context);
+        break;
+        
+      case 'closed':
+        if (lockerState === 'open') {
+          setLockerState('occupied');
+        } else if (lockerState === 'retrieved') {
+          setLockerState('available');
+        }
+        break;
+        
+      case 'object_detected':
+      case 'object_present':
+      case 'distance_change':
+        // These events can be used for more detailed status updates
+        // For example, showing a visual indication when an object is detected
+        break;
+        
+      case 'closing_in':
+        setEventContext(event.context);
+        break;
+    }
+  };
+  
+  // Initialize WebSocket connection
+  useEffect(() => {
+    websocketService.connect();
+    websocketService.addEventListener(handleWebSocketEvent);
+    
+    return () => {
+      websocketService.removeEventListener(handleWebSocketEvent);
+      websocketService.disconnect();
+    };
+  }, []);
   
   // Handle using the locker
   const handleUseLocker = async () => {
-    // Reiniciar errores previos
+    // Reset previous errors
     setApiError(null);
     
     if (!email) {
@@ -44,35 +92,13 @@ function App() {
     setIsLoading(true);
     
     try {
-      // Llamar al API para registrar el uso del locker
+      // Call API to register locker use
       const response = await useLocker(email);
       console.log('Respuesta del API:', response);
       
-      // Change state to open
+      // Change state to open - the WebSocket will handle the actual countdown
       setLockerState('open');
-      // Reset countdown to 10 seconds
-      setCountdown(10);
       
-      // Start countdown timer
-      if (countdownRef.current !== null) {
-        clearInterval(countdownRef.current);
-      }
-      
-      // Use window.setInterval for browser compatibility
-      countdownRef.current = window.setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            // When countdown reaches 0, change to occupied state
-            setLockerState('occupied');
-            if (countdownRef.current !== null) {
-              clearInterval(countdownRef.current);
-              countdownRef.current = null;
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
     } catch (error) {
       if (error instanceof Error) {
         setApiError(error.message);
@@ -87,7 +113,7 @@ function App() {
   
   // Handle PIN submission
   const handlePinSubmit = async () => {
-    // Reiniciar errores previos
+    // Reset previous errors
     setPinError('');
     
     if (!pin) {
@@ -103,21 +129,14 @@ function App() {
     setIsUnlocking(true);
     
     try {
-      // Llamar al API para desbloquear el locker
+      // Call API to unlock the locker
       const response = await unlockLocker(pin);
       console.log('Respuesta del API de desbloqueo:', response);
       
-      // IMPORTANTE: El backend responde con "ocupado" cuando el PIN es correcto
-      // Consideramos exitoso cualquier respuesta 200 del backend
+      // Set state to 'retrieved' - WebSocket will handle the transition back to 'available'
       setPinError('');
       setLockerState('retrieved');
       
-      // Simulate locker closing after retrieval
-      setTimeout(() => {
-        setLockerState('available');
-        setPin('');
-        setEmail('');
-      }, 3000);
     } catch (error) {
       if (error instanceof Error) {
         setPinError(error.message);
@@ -132,7 +151,7 @@ function App() {
   
   // Handle component cleanup
   useEffect(() => {
-    // Remover clase admin-page por si viene de esa página
+    // Remove admin-page class if coming from that page
     document.body.classList.remove('admin-page');
     // Add a class to the body for styling
     document.body.classList.add('kiosk-display');
@@ -143,11 +162,6 @@ function App() {
         document.exitFullscreen();
       }
       document.body.classList.remove('kiosk-display');
-      
-      // Clear any active timers
-      if (countdownRef.current) {
-        clearInterval(countdownRef.current);
-      }
     };
   }, []);
 
@@ -215,8 +229,16 @@ function App() {
           </div>
         </div>
       </div>
+      
+      {/* Context message - Optional, for debugging */}
+      {eventContext && (
+        <div className="fixed bottom-4 left-4 bg-black/70 text-white px-4 py-2 rounded-lg text-sm">
+          {eventContext}
+        </div>
+      )}
     </div>
   );
 }
 
 export default App;
+
