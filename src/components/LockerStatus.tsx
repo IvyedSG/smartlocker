@@ -3,9 +3,10 @@ import type { LockerState } from '../types';
 
 interface LockerStatusProps {
   status: LockerState;
+  isRetrieveMode?: boolean;
 }
 
-export const LockerStatus = ({ status }: LockerStatusProps) => {
+export const LockerStatus = ({ status, isRetrieveMode = false }: LockerStatusProps) => {
   switch (status) {
     case 'available':
       return (
@@ -27,7 +28,9 @@ export const LockerStatus = ({ status }: LockerStatusProps) => {
           </div>
           <div>
             <div className="text-3xl font-bold text-amber-400">ABIERTO</div>
-            <div className="text-amber-300/80 text-lg">Depósito en proceso</div>
+            <div className="text-amber-300/80 text-lg">
+              {isRetrieveMode ? 'Retiro en proceso' : 'Depósito en proceso'}
+            </div>
           </div>
         </div>
       );

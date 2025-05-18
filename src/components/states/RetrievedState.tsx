@@ -1,4 +1,4 @@
-import { Check, ArrowRight, Package } from 'lucide-react';
+import { Check, ArrowRight, Package, RefreshCw } from 'lucide-react';
 
 interface RetrievedStateProps {
   countdown?: number;
@@ -29,6 +29,12 @@ export const RetrievedState = ({
             </div>
           )}
         </p>
+
+        {/* Siempre mostrar el mensaje de reinicio */}
+        <div className="mt-6 text-blue-600 flex items-center justify-center gap-2 text-xl animate-pulse">
+          <RefreshCw className="w-6 h-6" />
+          <span>Reiniciando el sistema en unos segundos...</span>
+        </div>
       </div>
       
       <div className="bg-gray-50 border-gray-200 border rounded-xl p-6 flex items-center justify-between">

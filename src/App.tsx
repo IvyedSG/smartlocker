@@ -50,7 +50,7 @@ function App() {
         // El locker físicamente ha comenzado a abrirse
         if (isRetrieveMode) {
           // En modo retiro, mostrar la interfaz específica de retiro
-          setLockerState('retrieved');
+          setLockerState('open'); // Cambiamos a 'open' pero con isRetrieveMode=true
         } else {
           // En modo depósito, mostrar la interfaz de depósito abierto
           setLockerState('open');
@@ -60,7 +60,12 @@ function App() {
       case 'store_timer':
         // Contador que se reinicia mientras hay detección de movimiento
         setCountdown(event.value);
-        setEventContext(event.context || '');
+        // Modificar el contexto basado en el modo actual
+        if (isRetrieveMode) {
+          setEventContext('esperando retiro del objeto');
+        } else {
+          setEventContext(event.context || '');
+        }
         break;
         
       case 'object_detected':
@@ -94,12 +99,13 @@ function App() {
       case 'closed':
         // El locker físicamente se ha cerrado
         if (isRetrieveMode) {
-          // Si estábamos en modo retiro, ahora está disponible
-          // El backend ya maneja el cambio de estado en BD
-          setLockerState('available');
-          setIsRetrieveMode(false);
-          setPin(''); // Limpiar PIN
-          setEmail(''); // Importante: Reiniciar el email para empezar de nuevo
+          // Si estábamos en modo retiro, primero mostrar la pantalla de retrieved
+          setLockerState('retrieved'); // Mostrar pantalla de objeto retirado
+          
+          // Después de un tiempo (3 segundos), volver a 'available'
+          setTimeout(() => {
+            resetApp();
+          }, 3000);
         } else {
           // Si estábamos en modo depósito, ahora está ocupado
           setLockerState('occupied');
@@ -110,9 +116,12 @@ function App() {
         break;
         
       case 'object_retrieved':
-        // El servidor confirma que el objeto ha sido retirado
-        // Este evento es más para logs, la UI ya está en estado 'retrieved'
-        // y la transición a 'available' ocurrirá con 'closed'
+        // El objeto ha sido retirado exitosamente
+        if (isRetrieveMode) {
+          // Cambiar a estado retrieved para mostrar confirmación visual
+          setLockerState('retrieved');
+          setObjectDetected(false);
+        }
         break;
     }
   };
@@ -236,29 +245,52 @@ function App() {
       // Si la respuesta dice que el estado es "disponible", significa que
       // el objeto ya fue retirado o el locker está listo para usarse nuevamente
       if (response.status === "disponible" && response.assigned_user_id === null) {
-        // Resetear completamente la aplicación para comenzar de nuevo
-        setLockerState('available');
-        setPin('');
-        setEmail('');
-        setIsRetrieveMode(false);
-        setObjectDetected(false);
-        setEventContext('');
+        // Mostrar brevemente la pantalla de objeto retirado antes de resetear
+        setLockerState('retrieved');
+        
+        // Después de 3 segundos, reiniciar completamente
+        setTimeout(() => {
+          resetApp();
+        }, 3000);
+        
         return;
       }
       
       // Si no hay WebSocket, manejar la transición manualmente
       if (!wsConnected) {
-        // Primero mostrar la interfaz de retiro
-        setLockerState('retrieved');
+        // En modo retiro, mostrar directamente la interfaz de open con isRetrieveMode=true
+        setLockerState('open');
+        let count = 10;
+        setCountdown(count);
+        setEventContext('esperando retiro del objeto');
         
-        // Después de un tiempo, volver a disponible y reiniciar todo
-        setTimeout(() => {
-          resetApp();
-        }, 5000);
+        // Simular el timer del locker
+        if (timerRef.current !== null) {
+          clearInterval(timerRef.current);
+        }
+        
+        timerRef.current = window.setInterval(() => {
+          count--;
+          setCountdown(count);
+          
+          if (count <= 0) {
+            if (timerRef.current !== null) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
+            
+            // Mostrar pantalla de objeto retirado antes de reiniciar
+            setLockerState('retrieved');
+            
+            // Después de 3 segundos, reiniciar completamente
+            setTimeout(() => {
+              resetApp();
+            }, 3000);
+          }
+        }, 1000);
       }
       // En caso contrario, WebSocket manejará las transiciones
-      // La transición a 'retrieved' ocurrirá con el evento 'opening'
-      
+    
     } catch (error) {
       if (error instanceof Error) {
         setPinError(error.message);
@@ -273,8 +305,33 @@ function App() {
     }
   };
   
+  // Agregar esta función después de handlePinSubmit
+  const handleRetrievalFlow = () => {
+    // Si recibimos un evento closed en modo retiro
+    if (isRetrieveMode && lockerState === 'open') {
+      // Limpiar todo y volver al estado inicial
+      resetApp();
+    }
+  };
+
+  // Agregar un useEffect para manejar automáticamente el flujo de retiro
+  useEffect(() => {
+    // Esta función se ejecutará cada vez que cambie lockerState o isRetrieveMode
+    if (lockerState === 'open' && isRetrieveMode) {
+      // Estamos en modo retiro con el locker abierto
+      console.log("En modo retiro, esperando a que el usuario retire su objeto");
+    }
+  }, [lockerState, isRetrieveMode]);
+  
   // Función para reiniciar completamente la aplicación
   const resetApp = () => {
+    // Primero limpiar cualquier timer pendiente
+    if (timerRef.current !== null) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Luego reestablecer todos los estados
     setLockerState('available');
     setPin('');
     setEmail('');
@@ -283,6 +340,9 @@ function App() {
     setPinError('');
     setObjectDetected(false);
     setEventContext('');
+    setCountdown(10);
+    
+    console.log("Aplicación reiniciada completamente");
   };
   
   // Handle component cleanup
@@ -365,7 +425,7 @@ function App() {
       <div className="w-full h-full max-h-[900px] max-w-7xl flex items-center justify-center p-0 overflow-hidden">
         <div className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl shadow-2xl overflow-hidden border-8 border-slate-700 flex flex-row">
           {/* Left Panel - Locker Information */}
-          <StatusPanel status={lockerState} />
+          <StatusPanel status={lockerState} isRetrieveMode={isRetrieveMode} />
           
           {/* Right Panel - Interactive Area */}
           <div className="w-3/5 bg-white p-10 flex flex-col justify-center items-center">

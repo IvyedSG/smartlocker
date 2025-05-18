@@ -4,9 +4,10 @@ import type { LockerState } from '../types';
 
 interface StatusPanelProps {
   status: LockerState;
+  isRetrieveMode?: boolean;
 }
 
-export const StatusPanel = ({ status }: StatusPanelProps) => {
+export const StatusPanel = ({ status, isRetrieveMode = false }: StatusPanelProps) => {
   const getCurrentDateTime = () => {
     const now = new Date();
     return now.toLocaleString('es-ES', {
@@ -48,7 +49,7 @@ export const StatusPanel = ({ status }: StatusPanelProps) => {
           
           {/* Ajustado para evitar que se salga del contenedor */}
           <div className="transform scale-105 origin-left">
-            <LockerStatus status={status} />
+            <LockerStatus status={status} isRetrieveMode={isRetrieveMode} />
           </div>
         </div>
         

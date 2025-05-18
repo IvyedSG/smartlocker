@@ -128,7 +128,7 @@ export const OpenState = ({
               ? `Cerrando automáticamente en ${countdown}s`
               : isRetrieveMode
                 ? objectDetected 
-                  ? `Tiempo para retirar: ${countdown}s` 
+                  ? `Tiempo para retirar el objeto: ${countdown}s` 
                   : `Cerrando automáticamente en ${countdown}s`
                 : objectDetected 
                   ? `Detectando objeto... ${countdown}s` 
