@@ -111,18 +111,23 @@ function App() {
           setIsUnlocking(false);
         }
         
-        // PUNTO CRÍTICO: Si estamos en modo retiro, SIEMPRE mostrar la pantalla de agradecimiento
+        // *** CAMBIO CRUCIAL: Manejar los diferentes modos ***
         if (isRetrieveMode) {
-          console.log("MODO RETIRO: Cambiando a estado 'retrieved' tras evento 'closed'");
+          // Asegúrate de que esta línea se ejecuta correctamente
+          console.log("MODO RETIRO -> CAMBIANDO A PANTALLA DE AGRADECIMIENTO");
           
-          // Cambiar explícitamente al estado retrieved (pantalla de agradecimiento)
+          // IMPORTANTE: Cambiar explícitamente a 'retrieved' (pantalla de agradecimiento)
+          // y hacer el reseteo en un setTimeout separado
           setLockerState('retrieved');
           
-          // Después de un tiempo, regresar al estado inicial para un nuevo usuario
-          setTimeout(() => {
-            console.log("REINICIANDO APLICACIÓN después del retiro exitoso");
+          // Programar el reinicio después de 5 segundos
+          const resetTimer = setTimeout(() => {
+            console.log("TEMPORIZADOR EJECUTADO: Reiniciando aplicación tras retiro exitoso");
             resetApp();
           }, 5000);
+          
+          // Guardamos la referencia al timer para limpiarlo si es necesario
+          timerRef.current = resetTimer;
         } else {
           // En modo depósito: ahora el locker está ocupado
           setLockerState('occupied');
@@ -313,19 +318,7 @@ function App() {
     }
   };
    
-  // Actualizar esta función
-  const handleRetrievalFlow = () => {
-    // Si recibimos un evento closed en modo retiro
-    if (isRetrieveMode && lockerState === 'closed') {
-      // Cambiamos a estado retrieved primero
-      setLockerState('retrieved');
-      
-      // Después de un tiempo, volver al estado inicial
-      setTimeout(() => {
-        resetApp();
-      }, 5000);
-    }
-  };
+  // (handleRetrievalFlow eliminado porque no se usa)
 
   // Agregar un useEffect para manejar automáticamente el flujo de retiro
   useEffect(() => {
@@ -357,27 +350,27 @@ function App() {
       timerRef.current = null;
     }
     
-    // Luego reestablecer todos los estados en orden específico para evitar condiciones de carrera
-    console.log("Reiniciando estados de la aplicación");
-    
-    // IMPORTANTE: Primero desactivamos el modo de retiro para que no interfiera con los otros cambios de estado
-    setIsRetrieveMode(false);
-    
-    // Luego limpiamos los demás estados
-    setIsUnlocking(false);
-    setObjectDetected(false);
-    setEventContext('');
-    setCountdown(10);
-    setPinError('');
-    setApiError(null);
-    setPin('');
-    setEmail('');
-    
-    // El cambio de estado del locker debe ser lo último para evitar renderizados intermedios
-    console.log("Estableciendo estado del locker a 'available'");
-    setLockerState('available');
-    
-    console.log("Aplicación reiniciada completamente");
+    // IMPORTANTE: Realizamos los cambios en un único ciclo de renderizado
+    // para evitar condiciones de carrera
+    setTimeout(() => {
+      console.log("Reiniciando estados de la aplicación en un único ciclo");
+      
+      // Desactivamos el modo de retiro primero
+      setIsRetrieveMode(false);
+      setIsUnlocking(false);
+      setObjectDetected(false);
+      setEventContext('');
+      setCountdown(10);
+      setPinError('');
+      setApiError(null);
+      setPin('');
+      setEmail('');
+      
+      // Crucial: cambiamos el estado del locker al final
+      setLockerState('available');
+      
+      console.log("Aplicación reiniciada completamente");
+    }, 0);
   };
   
   // Handle component cleanup
